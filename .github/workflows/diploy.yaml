@@ -13,13 +13,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Deploy via ssh
-        uses: appleboy/ssh-action@v0.1.3
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0  # Updated to latest version
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: root
+          username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
           script: |
+            # Navigate to project directory or clone if doesn't exist
+            if [ ! -d "/root/node-application-ci-cd" ]; then
+              echo "Directory doesn't exist, cloning repository..."
+              git clone https://github.com/MohammadAtifHossain/node-application-ci-cd.git /root/node-application-ci-cd
+            fi
+            
             cd /root/node-application-ci-cd
-            git pull
+            
+            # Pull latest changes
+            git pull origin main
+            
+            # Install Docker if not installed
+            if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sh get-docker.sh
+              systemctl start docker
+              systemctl enable docker
+            fi
+            
+            # Install Docker Compose if not installed
+            if ! command -v docker-compose &> /dev/null; then
+              echo "Installing Docker Compose..."
+              curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              chmod +x /usr/local/bin/docker-compose
+            fi
+            
+            # Stop and remove existing containers
+            docker-compose down || true
+            
+            # Build and start containers
             docker-compose up -d --build
